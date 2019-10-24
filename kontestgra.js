@@ -1,11 +1,11 @@
+"use strict"
 const
-// Credentials removed before publication.
   db = {
-    user: "",
-    password: "",
-    database: ""
+    user: "gamemaster",
+    password: "aleaiactaest",
+    database: "KontestGra"
   },
-  adminPass = "",
+  adminPass = "jakijestwynikgry",
 // Investigate possibility of switching to ES modules.
 // May require newer Node.js (which couldn't be installed on Kontestacja's server).
   crypto = require("crypto"),
@@ -104,7 +104,7 @@ const
 // Eventually should be done when the user joins a game.
       await toPromise(conn, "query",
         `INSERT INTO progress
-          (SELECT id, 1, 1 FROM user WHERE id NOT IN
+          (SELECT id, 1, 0 FROM user WHERE id NOT IN
             (SELECT user FROM progress))`)
 
       await toPromise(conn, "query",

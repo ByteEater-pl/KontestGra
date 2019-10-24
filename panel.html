@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 <head>
 <title>KontestGra – admin panel</title>
 <style>
@@ -46,18 +46,23 @@ td span {
 <!--Only one game for now, but prepare for more.-->
 <select name="question_gameId">
 <option value="0">unassigned questions</option>
-<optgroup label="from game">
+<optgroup label="for game">
 <option value="1">testowa</option>
 </optgroup>
 </select>
 </td>
-<td><input name="question_text"/><!--
-Change to textarea if the considered switch to HTML in questions goes through.
---></td>
+<td>
+<textarea
+  name="question_text"
+  oninput="adjust(this)"
+  onchange="change(this)"
+/>
+</td>
 <td><input type="radio" name="question" onclick="editAnswers()"/></td>
 <td><button type="button" onclick="remove()">❌</button></td>
 </tr>
 </template>
+<template id="malformed"><i>is malformed</i></template>
 <template id="answer">
 <tr>
 <input type="hidden" name="answer_questionId"/>
@@ -69,22 +74,51 @@ Change to textarea if the considered switch to HTML in questions goes through.
 </tr>
 </template>
 <script>
-//<![CDATA[
+<![CDATA[
 "use strict"
 const
   $ = document.getElementById.bind(document),
+  parser = new DOMParser,
+  parsed = new WeakMap,
+  malformed = $("malformed").content.firstChild.cloneNode(true),
   pass = $("user").content.querySelector("[name=user_pass]")
 let
   maxQId = 1,
   selQ
 this.onload = () => selQ = $("selQ").lastChild
+
 function toggleButtons() {
   for (const btn of
     document.querySelectorAll("fieldset button"))
     btn.disabled = !event.target.checked
 }
+
+function adjust(element) {
+  element.style.height = ""
+  element.style.height = element.scrollHeight + "px"
+}
+
+function parse(element) {
+  const doc = parser.parseFromString(
+    `<_>${element.value}</_>`, "text/xml")
+  const ok = !doc.querySelector("*|parsererror")
+  parsed.set(element, ok ? doc.documentElement.textContent : malformed)
+  return ok
+}
+
+function change(element) {
+  if (!parse(element)) alert("The entered fragment is not well-formed!")
+  if (element.parentNode.nextElementSibling.firstChild.checked)
+    sel_q(element)
+}
+
+function sel_q(element) {
+  $("selQ").lastChild.replaceWith(parsed.get(element))
+}
+
 // Possibly unify the following two functions.
 // Or add dragging (but retain a11y).
+
 function up() {
   const
     row = event.target.parentNode.parentNode,
@@ -95,6 +129,7 @@ function up() {
       && prev.firstElementChild.value == row.firstElementChild.value))
     prev.before(row)
 }
+
 function down() {
   const
     row = event.target.parentNode.parentNode,
@@ -105,6 +140,7 @@ function down() {
       && next.firstElementChild.value == row.firstElementChild.value))
     next.after(row)
 }
+
 function remove() {
   if (confirm("For sure delete this record?")) {
     const
@@ -118,23 +154,27 @@ function remove() {
     }
   }
 }
+
 function editAnswers() {
   const qRow = event.target.parentNode.parentNode
   for (const ansRow of $("answers").children) ansRow.hidden =
     ansRow.firstElementChild.value != qRow.firstElementChild.value
-  $("selQ").lastChild.replaceWith(qRow.querySelector("[name=question_text]").value)
+  sel_q(qRow.querySelector("textarea"))
   $("addAnswer").disabled = false
   $("answer").content.firstElementChild.hidden = false
 // Change to checking radio when planned tabbed interface in place.
   $("answers").scrollIntoView()
 }
+
 function addUser() {
   pass.required = true
   populate({user: {}})
 }
+
 function addQuestion() {
   populate({question: {id: ++maxQId}})
 }
+
 function add_answer() {
   populate({answer: {questionId:
     $("questions")
@@ -143,6 +183,7 @@ function add_answer() {
     .value
   }})
 }
+
 function populate(entity) {
   const
     [[name, data]] = Object.entries(entity),
@@ -151,6 +192,7 @@ function populate(entity) {
   for (const [k, v] of Object.entries(data))
     row.querySelector(`[name=${name}_${k}]`).value = v
 }
+
 async function load() {
   $("unlock").checked = true
   $("unlock").click()
@@ -168,6 +210,10 @@ async function load() {
       $("questions").textContent = ""
       for (const question of res.questions)
         populate({question})
+      for (const text of document.querySelectorAll("textarea")) {
+        adjust(text)
+        parse(text)
+      }
       maxQId = res.questions.length &&
         res.questions.sort((a, b) => b.id - a.id)[0].id
       $("selQ").lastChild.replaceWith(selQ)
@@ -182,6 +228,7 @@ async function load() {
   catch { alert("Error occurred!") }
   $("unlock").disabled = false
 }
+
 async function save() {
   $("unlock").click()
   const [form] = document.forms
@@ -206,7 +253,7 @@ async function save() {
     $("unlock").disabled = false
   }
 }
-//]]>
+]]>
 </script>
 </head>
 <body>
@@ -274,7 +321,13 @@ Unlock overwriting
 </thead>
 <tbody id="answers"/>
 </table>
-<button type="button" id="addAnswer" disabled="" onclick="add_answer()">Add answer</button>
+<button
+  type="button"
+  id="addAnswer"
+  disabled=""
+  onclick="add_answer()">
+Add answer
+</button>
 </div>
 </form>
 </body>

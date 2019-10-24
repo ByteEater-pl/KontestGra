@@ -1,9 +1,38 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="pl" xml:lang="pl">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="pl">
 <head>
 <title>KontestGra</title>
+<style>
+html {
+  background: cornsilk;
+}
+body > h1 {
+  display: table;
+  margin: 1ex auto;
+  background: linear-gradient(20deg, red, gold, red, gold, red);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font: 900 5ex sans-serif;
+}
+fieldset {
+  background: lightgrey;
+}
+legend {
+  font-weight: bold;
+}
+#logout {
+  float: right;
+}
+#question {
+  max-width: 777px;
+}
+#success p, #finish {
+  font: oblique x-large Desdemona, "Comic Sans MS", fantasy;
+}
+</style>
 <script>
-//<![CDATA[
+<![CDATA[
 "use strict"
 const $ = document.getElementById.bind(document)
 
@@ -39,7 +68,7 @@ async function play() {
     const [{text} = {}] = await (await fetch("endpoint/getQuestion",
       {method: "POST", body: new FormData(document.forms[0])})).json()
     if (text >= "") {
-      $("question").textContent = text
+      $("question").innerHTML = text
       $("answer").value = ""
       $("quiz").hidden = false
     }
@@ -49,6 +78,7 @@ async function play() {
     }
   }
   catch { alert("Wystąpił błąd!") }
+  finally { $("send").disabled = false }
 }
 
 async function attempt() {
@@ -57,16 +87,18 @@ async function attempt() {
       {closest} = await (await fetch("endpoint/attempt",
         {method: "POST", body: new FormData(event.target.form)})).json()
     if ($("failure").hidden = closest != null) {
+      $("send").disabled = true
       $("correct").textContent = closest
       $("success").hidden = false
     }
   }
   catch { alert("Wystąpił błąd!") }
 }
-//]]>
+]]>
 </script>
 </head>
 <body>
+<h1>Witaj w KontestGrze! Have fun!</h1>
 <form onsubmit="event.preventDefault()">
 <!--Only one game for now, but prepare for more.-->
 <input type="hidden" name="game" value="1"/>
@@ -78,12 +110,12 @@ async function attempt() {
 </fieldset>
 <button id="logout" onclick="log_out()" hidden="">Wyloguj</button>
 <section id="quiz" hidden="">
-<h1 id="question"></h1>
+<h1 id="question"/>
 <label>
 Twoja odpowiedź:
 <input id="answer" name="answer"/>
 </label>
-<button onclick="attempt()">Wyślij odpowiedź</button>
+<button id="send" onclick="attempt()">Wyślij odpowiedź</button>
 </section>
 <section>
 <div id="success" hidden="">
