@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="pl" xml:lang="pl">
+<head>
+<title>KontestGra</title>
+<script>
+//<![CDATA[
+"use strict"
+const $ = document.getElementById.bind(document)
+
+async function login() {
+  $("log").hidden = true
+  try {
+    if (await (await fetch("endpoint/login",
+      {method: "POST", body: new FormData(event.target.form)})).json()) {
+      $("logout").hidden = false
+      await play()
+    }
+    else {
+      $("log").hidden = false
+      alert("Nieprawidłowa nazwa użytkownika lub hasło!")
+    }
+  }
+  catch {
+    $("log").hidden = false
+    alert("Wystąpił błąd!")
+  }
+}
+
+function log_out() {
+  $("user").value = $("pass").value = ""
+  $("log").hidden = false
+  for (const id of ["logout", "quiz", "success", "failure", "finish"])
+    $(id).hidden = true
+}
+
+async function play() {
+  $("success").hidden = true
+  try {
+    const [{text} = {}] = await (await fetch("endpoint/getQuestion",
+      {method: "POST", body: new FormData(document.forms[0])})).json()
+    if (text >= "") {
+      $("question").textContent = text
+      $("answer").value = ""
+      $("quiz").hidden = false
+    }
+    else {
+      $("quiz").hidden = true
+      $("finish").hidden = false
+    }
+  }
+  catch { alert("Wystąpił błąd!") }
+}
+
+async function attempt() {
+  try {
+    const
+      {closest} = await (await fetch("endpoint/attempt",
+        {method: "POST", body: new FormData(event.target.form)})).json()
+    if ($("failure").hidden = closest != null) {
+      $("correct").textContent = closest
+      $("success").hidden = false
+    }
+  }
+  catch { alert("Wystąpił błąd!") }
+}
+//]]>
+</script>
+</head>
+<body>
+<form onsubmit="event.preventDefault()">
+<!--Only one game for now, but prepare for more.-->
+<input type="hidden" name="game" value="1"/>
+<fieldset id="log">
+<legend>Logowanie gracza</legend>
+<label>Nazwa użytkownika: <input id="user" name="user"/></label>
+<label>Hasło: <input type="password" id="pass" name="pass"/></label>
+<button onclick="login()">Zaloguj</button>
+</fieldset>
+<button id="logout" onclick="log_out()" hidden="">Wyloguj</button>
+<section id="quiz" hidden="">
+<h1 id="question"></h1>
+<label>
+Twoja odpowiedź:
+<input id="answer" name="answer"/>
+</label>
+<button onclick="attempt()">Wyślij odpowiedź</button>
+</section>
+<section>
+<div id="success" hidden="">
+<p>Wyzwanie zaliczone, gratulujemy! Prawidłowa odpowiedź to: <b id="correct"/></p>
+<button onclick="play()">Kontynuuj grę</button>
+</div>
+<div id="failure" hidden="">Odpowiedź nieprawidłowa. Spróbuj jeszcze raz!</div>
+<div id="finish" hidden="">Przeszedłeś całą grę! Jesteś zwycięzcą! Spraw sobie fajną nagrodę, a z nami się podziel 😁</div>
+</section>
+</form>
+</body>
+</html>

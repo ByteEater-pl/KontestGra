@@ -1,0 +1,16 @@
+{
+  "name": "kontestgra",
+  "version": "1.0.0",
+  "description": "KontestGra",
+  "main": "kontestgra.js",
+  "dependencies": {
+    "multiparty": "^4.2.1",
+    "mysql": "^2.17.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ByteEater",
+  "license": "ISC"
+}

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<title>KontestGra – admin panel</title>
+<style>
+legend ~ * {
+  margin: 0 2ex;
+}
+table {
+  margin-top: 1em;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 0 1ex;
+  border: thin solid grey;
+  text-align: center;
+}
+th {
+  white-space: pre-wrap;
+}
+td input {
+  border: none;
+}
+td span {
+  font-weight: bold;
+  color: red;
+}
+[name$=text] {
+  min-width: 50ch;
+}
+</style>
+<template id="user">
+<tr>
+<input type="hidden" name="user_id"/>
+<td><input name="user_name"/><span title="User removed, so password required to readd." hidden="">*</span></td>
+<td><input type="password" name="user_pass"/></td>
+<td><button type="button" onclick="remove()">❌</button></td>
+</tr>
+</template>
+<template id="question">
+<tr>
+<input type="hidden" name="question_id"/>
+<td><button type="button" onclick="up()">🡅</button></td>
+<td><button type="button" onclick="down()">🡇</button></td>
+<td>
+<!--Only one game for now, but prepare for more.-->
+<select name="question_gameId">
+<option value="0">unassigned questions</option>
+<optgroup label="from game">
+<option value="1">testowa</option>
+</optgroup>
+</select>
+</td>
+<td><input name="question_text"/><!--
+Change to textarea if the considered switch to HTML in questions goes through.
+--></td>
+<td><input type="radio" name="question" onclick="editAnswers()"/></td>
+<td><button type="button" onclick="remove()">❌</button></td>
+</tr>
+</template>
+<template id="answer">
+<tr>
+<input type="hidden" name="answer_questionId"/>
+<td><button type="button" onclick="up()">🡅</button></td>
+<td><button type="button" onclick="down()">🡇</button></td>
+<td><input name="answer_text"/></td>
+<td><input type="number" name="answer_misspellings" value="0" min="0"/></td>
+<td><button type="button" onclick="remove()">❌</button></td>
+</tr>
+</template>
+<script>
+//<![CDATA[
+"use strict"
+const
+  $ = document.getElementById.bind(document),
+  pass = $("user").content.querySelector("[name=user_pass]")
+let
+  maxQId = 1,
+  selQ
+this.onload = () => selQ = $("selQ").lastChild
+function toggleButtons() {
+  for (const btn of
+    document.querySelectorAll("fieldset button"))
+    btn.disabled = !event.target.checked
+}
+// Possibly unify the following two functions.
+// Or add dragging (but retain a11y).
+function up() {
+  const
+    row = event.target.parentNode.parentNode,
+    prev = row.previousElementSibling
+  if (prev
+    && (row.parentNode.id != "answer"
+      || !prev.hidden
+      && prev.firstElementChild.value == row.firstElementChild.value))
+    prev.before(row)
+}
+function down() {
+  const
+    row = event.target.parentNode.parentNode,
+    next = row.nextElementSibling
+  if (next
+    && (row.parentNode.id != "answer"
+      || !next.hidden
+      && next.firstElementChild.value == row.firstElementChild.value))
+    next.after(row)
+}
+function remove() {
+  if (confirm("For sure delete this record?")) {
+    const
+      tr = event.target.parentNode.parentNode,
+      radio = tr.querySelector("[name=question]")
+    tr.remove()
+    if (radio && radio.checked) {
+      for (const row of $("answers").children) row.hidden = true
+      $("selQ").lastChild.replaceWith(selQ)
+      $("addAnswer").disabled = true
+    }
+  }
+}
+function editAnswers() {
+  const qRow = event.target.parentNode.parentNode
+  for (const ansRow of $("answers").children) ansRow.hidden =
+    ansRow.firstElementChild.value != qRow.firstElementChild.value
+  $("selQ").lastChild.replaceWith(qRow.querySelector("[name=question_text]").value)
+  $("addAnswer").disabled = false
+  $("answer").content.firstElementChild.hidden = false
+// Change to checking radio when planned tabbed interface in place.
+  $("answers").scrollIntoView()
+}
+function addUser() {
+  pass.required = true
+  populate({user: {}})
+}
+function addQuestion() {
+  populate({question: {id: ++maxQId}})
+}
+function add_answer() {
+  populate({answer: {questionId:
+    $("questions")
+    .querySelector("input:checked")
+    .parentNode.parentNode.firstElementChild
+    .value
+  }})
+}
+function populate(entity) {
+  const
+    [[name, data]] = Object.entries(entity),
+    row = $(name + "s")
+      .appendChild($(name).content.firstElementChild.cloneNode(true))
+  for (const [k, v] of Object.entries(data))
+    row.querySelector(`[name=${name}_${k}]`).value = v
+}
+async function load() {
+  $("unlock").checked = true
+  $("unlock").click()
+  $("unlock").disabled = true
+  try {
+    const res = await
+      (await fetch("endpoint/load",
+        {method: "POST", body: new FormData(document.forms[0])}))
+      .json()
+    if (res) {
+      pass.required = false
+      $("users").textContent = ""
+      for (const user of res.users)
+        populate({user})
+      $("questions").textContent = ""
+      for (const question of res.questions)
+        populate({question})
+      maxQId = res.questions.length &&
+        res.questions.sort((a, b) => b.id - a.id)[0].id
+      $("selQ").lastChild.replaceWith(selQ)
+      $("addAnswer").disabled = true
+      $("answers").textContent = ""
+      $("answer").content.firstElementChild.hidden = true
+      for (const answer of res.answers)
+        populate({answer})
+    }
+   else alert("Wrong password!")
+  }
+  catch { alert("Error occurred!") }
+  $("unlock").disabled = false
+}
+async function save() {
+  $("unlock").click()
+  const [form] = document.forms
+  if (form.reportValidity()) {
+    $("unlock").disabled = true
+    try {
+      const missingPass = await
+        (await fetch("endpoint/save",
+          {method: "POST", body: new FormData(form)}))
+        .json()
+      if (!missingPass) alert("Wrong password!")
+// Possibly change to reduce with Boolean result as condition for alert.
+// During fetch the admin may have removed all users who'd be marked.
+      else if (missingPass.length) {
+        for (const tr of $("users").children)
+          tr.querySelector("span").hidden =
+            !missingPass.includes(tr.firstElementChild.value)
+        alert("Users marked with * have been concurrently removed. Provide passwords for them if you want to readd them at next save.")
+      }
+    }
+    catch { alert("Error occurred!") }
+    $("unlock").disabled = false
+  }
+}
+//]]>
+</script>
+</head>
+<body>
+<form>
+<fieldset>
+<legend>Data synchronization</legend>
+<label>
+Admin password:
+<input type="password" name="pass"/>
+</label>
+<label>
+Unlock overwriting
+<input type="checkbox" id="unlock" onclick="toggleButtons()"/>
+</label>
+<button type="button" onclick="load()">Load</button>
+<button type="button" onclick="save()" disabled="">Save</button>
+</fieldset>
+<div>
+<h1>Users</h1>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>New password
+<small>blank keeps current</small></th>
+<th>Remove</th>
+</tr>
+</thead>
+<tbody id="users"/>
+</table>
+<button type="button" onclick="addUser()">Add user</button>
+</div>
+<div>
+<h1>Questions</h1>
+<label>Select game:
+<select>
+<option>testowa</option>
+</select>
+</label>
+<table>
+<thead>
+<tr>
+<th colspan="2">Reorder</th>
+<th>Set</th>
+<th>Text</th>
+<th>Edit answers</th>
+<th>Remove</th>
+</tr>
+</thead>
+<tbody id="questions"/>
+</table>
+<button type="button" onclick="addQuestion()">Add question</button>
+</div>
+<div>
+<h1>Answers</h1>
+<span id="selQ">Selected question: <i>none</i></span>
+<table>
+<thead>
+<tr>
+<th colspan="2">Reorder</th>
+<th>Text</th>
+<th>Misspelling limit</th>
+<th>Remove</th>
+</tr>
+</thead>
+<tbody id="answers"/>
+</table>
+<button type="button" id="addAnswer" disabled="" onclick="add_answer()">Add answer</button>
+</div>
+</form>
+</body>
+</html>
