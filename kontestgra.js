@@ -1,11 +1,6 @@
 "use strict"
 const
-  db = {
-    user: "gamemaster",
-    password: "aleaiactaest",
-    database: "KontestGra"
-  },
-  adminPass = "jakijestwynikgry",
+  {db, adminPass} = require("./config"),
 // Investigate possibility of switching to ES modules.
 // May require newer Node.js (which couldn't be installed on Kontestacja's server).
   crypto = require("crypto"),
