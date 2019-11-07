@@ -5,6 +5,7 @@
 <style>
 html {
   background: cornsilk;
+  color: black;
 }
 body > h1 {
   display: table;
@@ -16,13 +17,17 @@ body > h1 {
   font: 900 5ex sans-serif;
 }
 fieldset {
+  float: right;
   background: lightgrey;
 }
-legend {
-  font-weight: bold;
+details > * + * {
+  display: table-row;
 }
-#logout {
-  float: right;
+legend {
+  display: block;
+  margin: auto;
+  background: gainsboro;
+  font-weight: bold;
 }
 #question {
   max-width: 777px;
@@ -103,12 +108,17 @@ async function attempt() {
 <!--Only one game for now, but prepare for more.-->
 <input type="hidden" name="game" value="1"/>
 <fieldset id="log">
-<legend>Logowanie gracza</legend>
+<legend>Rejestracja i logowanie</legend>
+Status: <span id="status">niezalogowany</span>
+<details>
+<summary>Opcje logowania</summary>
 <label>Nazwa użytkownika: <input id="user" name="user"/></label>
 <label>Hasło: <input type="password" id="pass" name="pass"/></label>
 <button onclick="login()">Zaloguj</button>
-</fieldset>
+<button onclick="">Zarejestruj i zaloguj</button>
+</details>
 <button id="logout" onclick="log_out()" hidden="">Wyloguj</button>
+</fieldset>
 <section id="quiz" hidden="">
 <h1 id="question"/>
 <label>

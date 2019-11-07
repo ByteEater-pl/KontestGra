@@ -210,7 +210,7 @@ async function load() {
       $("questions").textContent = ""
       for (const question of res.questions)
         populate({question})
-      for (const text of document.querySelectorAll("textarea")) {
+      for (const text of document.getElementsByTagName("textarea")) {
         adjust(text)
         parse(text)
       }
