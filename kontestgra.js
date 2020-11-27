@@ -5,35 +5,53 @@ const
 // May require newer Node.js (which couldn't be installed on Kontestacja's server).
   crypto = require("crypto"),
   handlers = conn => ({
-    async login({user, pass}) {
+    async login({user, pass, signup}) {
+      await toPromise(conn, "beginTransaction")
 // To refactor: call this from getQuestion and attempt.
-      if (!user || !pass) return false
       const [row] = await toPromise(conn, "query",
         "SELECT id, saltPassHash, salt FROM user WHERE name = ?", user)
-      return !!row && crypto.scryptSync(pass[0], row.salt, 7).equals(row.saltPassHash)
+      if (signup && !row) {
+        await addUser(conn, user, pass[0])
+        await toPromise(conn, "query",
+          `INSERT INTO progress
+            (SELECT id, 1, 0 FROM user WHERE id NOT IN
+              (SELECT user FROM progress))`)
+      }
+      await toPromise(conn, "commit")
+      return row ?
+        !signup && crypto.scryptSync(pass[0], row.salt, 7).equals(row.saltPassHash)
+        : !!signup
+     },
+    async getQuestion({user, pass, game, logged}) {
+console.log({user, pass, game, logged})
+      const [row] = logged ?
+        await toPromise(conn, "query",
+          "SELECT id, saltPassHash, salt FROM user WHERE name = ?", user) : [] // hurried, to refactor
+console.log(row)
+      return logged ?
+        !!row && crypto.scryptSync(pass[0], row.salt, 7).equals(row.saltPassHash)
+          && await toPromise(conn, "query",
+            `SELECT text FROM question, progress
+              WHERE gameId = game AND game = ? AND ord = question AND user =`
+            + row.id, +game)
+        : await toPromise(conn, "query",
+          "SELECT text FROM question WHERE ord = 0 AND gameId =" + game)
     },
-    async getQuestion({user, pass, game}) {
-      const [row] = await toPromise(conn, "query",
-        "SELECT id, saltPassHash, salt FROM user WHERE name = ?", user)
-      return !!row && crypto.scryptSync(pass[0], row.salt, 7).equals(row.saltPassHash)
-        && await toPromise(conn, "query",
-          `SELECT text FROM question, progress
-            WHERE gameId = game AND game = ? AND ord = question AND user =`
-          + row.id, +game)
-    },
-    async attempt({user, pass, game, answer}) {
-      const [row] = await toPromise(conn, "query",
-        "SELECT id, saltPassHash, salt FROM user WHERE name = ?", user)
-      if (row && crypto.scryptSync(pass[0], row.salt, 7).equals(row.saltPassHash)) {
+    async attempt({user, pass, game, answer, logged}) {
+      const [row] = logged ? await toPromise(conn, "query",
+        "SELECT id, saltPassHash, salt FROM user WHERE name = ?", user) : [] // hurried, to refactor
+      if (!logged || row && crypto.scryptSync(pass[0], row.salt, 7).equals(row.saltPassHash)) {
         await toPromise(conn, "beginTransaction")
         const
-          template = await toPromise(conn, "query",
+          template = await toPromise(conn, "query", (logged ?
             `SELECT answer.text, misspellings FROM answer, question, progress
               WHERE questionId = question.id
                 AND gameId = game
-                AND game = ?
                 AND ord = question
-                AND user =` + row.id, +game),
+                AND user = ${row.id}
+                AND game =`
+            : `SELECT answer.text, misspellings FROM answer, question
+              WHERE questionId = question.id AND ord = 1 AND gameId =`) + game),
           ansN = normalize(answer[0])
         let
           closest = null,
@@ -43,7 +61,7 @@ const
           if (dist < Math.min(misspellings + 1, acc))
             [closest, acc] = [text, dist]
         }
-        if (closest >= "") await toPromise(conn, "query",
+        if (+logged && closest >= "") await toPromise(conn, "query",
           `UPDATE progress SET question = question + 1
             WHERE user = ${row.id} AND game = ?`, +game)
         await toPromise(conn, "commit")
@@ -62,6 +80,7 @@ const
       }
     },
     async save(data) {
+// To refactor: destructure with {0: Identifier} instead of using || [].
       if (data.pass != adminPass) return false
 
       await toPromise(conn, "beginTransaction")
@@ -69,15 +88,13 @@ const
       const
         uIds = data.user_id || [],
         start = uIds.indexOf(""),
-        added = start < 0 ? [] : uIds.splice(start, Infinity)
+        added = start < 0 ? [] : uIds.splice(start, Infinity),
         stay = [],
         out = [],
         missingPass = []
 
-      function addUser(index) {
-        return toPromise(conn, "query",
-          "INSERT INTO user VALUES (DEFAULT, ?, ?, ?)",
-          [data.user_name[index], ...salt(data.user_pass[index])])
+      function addUser_i(index) {
+        return addUser(conn, data.user_name[index], data.user_pass[index])
       }
 
       for (const {id} of await toPromise(conn, "query",
@@ -93,8 +110,8 @@ const
               ${pass && ", saltPassHash = ?, salt = ?"}
               WHERE id =` + id,
             [data.user_name[i], ... pass && salt(pass)])
-          : pass ? addUser(i) : missingPass.push(id))
-      for (const i in added) await addUser(start + +i)
+          : pass ? addUser_i(i) : missingPass.push(id))
+      for (const i in added) await addUser_i(start + +i)
 // Temporary initialization for the time being with only 1 game.
 // Eventually should be done when the user joins a game.
       await toPromise(conn, "query",
@@ -120,6 +137,11 @@ const
       return missingPass
     }
   })
+
+function addUser(conn, name, pass) {
+  return toPromise(conn, "query",
+    "INSERT INTO user VALUES (DEFAULT, ?, ?, ?)", [name, ...salt(pass)])
+}
 
 function salt(pass) {
   const salt = crypto.randomBytes(9).toString('base64')
@@ -162,7 +184,8 @@ require("http").createServer(async (req, res) => {
 // The end call can be chained starting from Node.js 11.10.0 – change when upgraded.
     res.end(JSON.stringify(body))
   }
-  catch {
+  catch(e) {
+    console.log(e)
     res.writeHead(400, {"Content-Type": "text/plain"})
     res.end("Request could not be successfully processed.")
   }

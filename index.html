@@ -20,6 +20,9 @@ fieldset {
   float: right;
   background: lightgrey;
 }
+details {
+  margin-top: 1ex;
+}
 details > * + * {
   display: table-row;
 }
@@ -28,6 +31,10 @@ legend {
   margin: auto;
   background: gainsboro;
   font-weight: bold;
+}
+#status {
+  font-weight: bold;
+  text-decoration: underline;
 }
 #question {
   max-width: 777px;
@@ -39,19 +46,40 @@ legend {
 <script>
 <![CDATA[
 "use strict"
-const $ = document.getElementById.bind(document)
+const
+  $ = document.getElementById.bind(document),
+  statuses = ["niezalogowany", "zalogowany"]
+let logged = false
+this.onload = play
 
-async function login() {
+function setLogin(v) {
+  logged = v
+  $("status").textContent = statuses[+v]
+  $("continue").disabled = !v
+}
+
+async function remoteCall(fn, flags) {
+  const body = new FormData(document.forms[0])
+  for (const [k, v] of Object.entries(flags)) if (v) body.set(k, 1)
+  console.log(fn, flags, [...body.entries()])
+  return (await fetch("endpoint/" + fn, {method: "POST", body})).json()
+}
+
+async function login(signup) {
+  if (!$("user").value || !$("pass").value)
+    return alert("Nazwa użytkownika i hasło muszą być wypełnione!")
   $("log").hidden = true
   try {
-    if (await (await fetch("endpoint/login",
-      {method: "POST", body: new FormData(event.target.form)})).json()) {
+    if (await remoteCall("login", {signup})) {
+      setLogin(true)
       $("logout").hidden = false
       await play()
     }
     else {
       $("log").hidden = false
-      alert("Nieprawidłowa nazwa użytkownika lub hasło!")
+      alert(signup ?
+        "Użytkownika o takiej nazwie nie można zarejestrować, bo już istnieje!"
+        : "Nieprawidłowa nazwa użytkownika lub hasło!")
     }
   }
   catch {
@@ -61,8 +89,9 @@ async function login() {
 }
 
 function log_out() {
-  $("user").value = $("pass").value = ""
+  setLogin(false)
   $("log").hidden = false
+  $("user").value = $("pass").value = ""
   for (const id of ["logout", "quiz", "success", "failure", "finish"])
     $(id).hidden = true
 }
@@ -70,8 +99,7 @@ function log_out() {
 async function play() {
   $("success").hidden = true
   try {
-    const [{text} = {}] = await (await fetch("endpoint/getQuestion",
-      {method: "POST", body: new FormData(document.forms[0])})).json()
+    const [{text} = {}] = await remoteCall("getQuestion", {logged}) || []
     if (text >= "") {
       $("question").innerHTML = text
       $("answer").value = ""
@@ -82,19 +110,22 @@ async function play() {
       $("finish").hidden = false
     }
   }
-  catch { alert("Wystąpił błąd!") }
+  //catch { alert("Wystąpił błąd!") }
+  catch(e) { alert("Wystąpił błąd! " + e) }
   finally { $("send").disabled = false }
 }
 
 async function attempt() {
   try {
-    const
-      {closest} = await (await fetch("endpoint/attempt",
-        {method: "POST", body: new FormData(event.target.form)})).json()
+    const {closest} = await remoteCall("attempt", {logged})
     if ($("failure").hidden = closest != null) {
       $("send").disabled = true
       $("correct").textContent = closest
       $("success").hidden = false
+      if (!logged) {
+        alert("Zaloguj się, aby móc kontynuować grę.")
+        $("log").open = true
+      }
     }
   }
   catch { alert("Wystąpił błąd!") }
@@ -107,17 +138,17 @@ async function attempt() {
 <form onsubmit="event.preventDefault()">
 <!--Only one game for now, but prepare for more.-->
 <input type="hidden" name="game" value="1"/>
-<fieldset id="log">
+<fieldset>
 <legend>Rejestracja i logowanie</legend>
 Status: <span id="status">niezalogowany</span>
-<details>
+<details id="log">
 <summary>Opcje logowania</summary>
 <label>Nazwa użytkownika: <input id="user" name="user"/></label>
 <label>Hasło: <input type="password" id="pass" name="pass"/></label>
-<button onclick="login()">Zaloguj</button>
-<button onclick="">Zarejestruj i zaloguj</button>
+<button type="button" onclick="login()">Zaloguj</button>
+<button type="button" onclick="login(true)">Zarejestruj i zaloguj</button>
 </details>
-<button id="logout" onclick="log_out()" hidden="">Wyloguj</button>
+<button type="button" id="logout" onclick="log_out()" hidden="">Wyloguj</button>
 </fieldset>
 <section id="quiz" hidden="">
 <h1 id="question"/>
@@ -125,12 +156,12 @@ Status: <span id="status">niezalogowany</span>
 Twoja odpowiedź:
 <input id="answer" name="answer"/>
 </label>
-<button id="send" onclick="attempt()">Wyślij odpowiedź</button>
+<button type="button" id="send" onclick="attempt()">Wyślij odpowiedź</button>
 </section>
 <section>
 <div id="success" hidden="">
 <p>Wyzwanie zaliczone, gratulujemy! Prawidłowa odpowiedź to: <b id="correct"/></p>
-<button onclick="play()">Kontynuuj grę</button>
+<button type="button" id="continue" onclick="play()" disabled="">Kontynuuj grę</button>
 </div>
 <div id="failure" hidden="">Odpowiedź nieprawidłowa. Spróbuj jeszcze raz!</div>
 <div id="finish" hidden="">Przeszedłeś całą grę! Jesteś zwycięzcą! Spraw sobie fajną nagrodę, a z nami się podziel 😁</div>
